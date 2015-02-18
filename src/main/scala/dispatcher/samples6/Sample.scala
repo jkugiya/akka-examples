@@ -1,4 +1,4 @@
-package dispatcher.samples2
+package dispatcher.samples6
 
 import com.typesafe.config.ConfigFactory
 import akka.actor.ActorSystem
@@ -18,7 +18,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.forkjoin.ForkJoinPool
 
 /**
- * Future。スレッドによっては10秒くらいかかってしまう
+ * Future。samples2とほぼ同じだが、Future作る前に実行コンテクストを切り替える。
  */
 object Sample extends App {
   
@@ -61,13 +61,13 @@ case class End(executionTime: Long, queue: Queue[String])
 case object Finished
 
 class FirstTaskExecutor extends Actor with ActorLogging {
-  import context.dispatcher
   implicit val timeout = Timeout(60.seconds)
   def receive = {
     case DoTask(startFrom, queue) =>
       var currentQueue = queue :+ s"First@[${Thread.currentThread().getId}]"
       log.info(s"First started. ${currentQueue}")
       val originalSender = sender
+      implicit val ec = 
       Future {
         currentQueue = currentQueue :+ s"Second@[${Thread.currentThread().getId}]"
         log.info(s"SecondTask started. ${currentQueue}")
@@ -79,8 +79,8 @@ class FirstTaskExecutor extends Actor with ActorLogging {
           Thread.sleep(200L)
           log.info(s"SecondTask ended. ${currentQueue}")
           originalSender ! End(System.currentTimeMillis() - startFrom, currentQueue)
-        }
-      }
+        }(ExecutionContext.fromExecutor(new ForkJoinPool))
+      }(ExecutionContext.fromExecutor(new ForkJoinPool))
       log.info(s"First ended. ${currentQueue}")
   }
 }
